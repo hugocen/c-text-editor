@@ -21,6 +21,7 @@
 
 #define KILO_VERSION "0.0.1"
 #define KILO_TAB_STOP 8
+#define KILO_QUIT_TIMES 3
 
 #define CTRL_KEY(k) ((k) & 0x1f)  // bitwise-AND with 00011111
 
@@ -256,6 +257,14 @@ void editorRowInsertChar(eRow *row, int at, int c) {
     E.dirty++;
 }
 
+void editorRowDeleteChar(eRow *row, int at) {
+    if (at < 0 || at >= row->size) return;
+    memmove(&row->chars[at], &row->chars[at + 1], row->size - at);
+    row->size--;
+    editorUpdateRow(row);
+    E.dirty++;
+}
+
 /*** editor operations ***/
 
 void editorInsertChar(int c) {
@@ -264,6 +273,19 @@ void editorInsertChar(int c) {
     }
     editorRowInsertChar(&E.row[E.cy], E.cx, c);
     E.cx++;
+}
+
+void editorDeleteChar(void) {
+    if (E.cy == E.numRows) return;
+
+    eRow *row = &E.row[E.cy];
+    if (E.cx > 0) {
+        editorRowDeleteChar(row, E.cx - 1);
+        E.cx--;
+    } else if (E.cx == 0 && E.cy > 0) {
+        editorRowDelChar(row, E.cx - 1);
+        E.cx--;
+    }
 }
 
 /*** file i/o ***/
@@ -511,6 +533,7 @@ void editorMoveCursor(int key) {
 }
 
 void editorProcessKeypress(void) {
+    static int quit_times = KILO_QUIT_TIMES;
     int c = editorReadKey();
 
     switch (c) {
@@ -519,6 +542,11 @@ void editorProcessKeypress(void) {
             break;
 
         case CTRL_KEY('q'):
+            if (E.dirty && quit_times > 0) {
+                editorSetStatusMessage("WARNING!!! File has unsaved changes. Press Ctrl-Q %d more times to quit.", quit_times);
+                quit_times--;
+                return;
+            }
             clearScreen();
             exit(0);
             break;
@@ -539,7 +567,8 @@ void editorProcessKeypress(void) {
         case BACKSPACE:
         case CTRL_KEY('h'):
         case DEL_KEY:
-            /*TODO*/
+            if (c == DEL_KEY) editorMoveCursor(ARROW_RIGHT);
+            editorDeleteChar();
             break;
 
         case PAGE_UP:
@@ -571,6 +600,8 @@ void editorProcessKeypress(void) {
             editorInsertChar(c);
             break;
     }
+
+    quit_times = KILO_QUIT_TIMES;
 }
 
 /*** init ***/
